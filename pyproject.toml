@@ -24,6 +24,16 @@ where = ["src"]
 [tool.uv]
 package = true
 
+# Default index — Tsinghua mirror, drastically faster than upstream PyPI
+# from mainland China networks (minutes vs. hours). Override at the
+# command line with `--default-index https://pypi.org/simple` or via
+# setup.ps1's -Mirror flag. The runtime server doesn't touch PyPI; this
+# only affects `uv sync` / `uv add` / `uv lock`.
+[[tool.uv.index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
 [dependency-groups]
 dev = [
     # placeholders — extend with pytest / ruff / mypy as needed

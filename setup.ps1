@@ -19,12 +19,19 @@
 
 .PARAMETER NoVerify
     Skip the final import-verification step.
+
+.PARAMETER Mirror
+    PyPI mirror to use during `uv sync`. Defaults to `default`, which means
+    "trust the pyproject.toml [[tool.uv.index]] block" (currently Tsinghua).
+    Use `pypi` to force upstream PyPI, or one of the named China mirrors.
 #>
 
 [CmdletBinding()]
 param(
     [switch]$SkipUvInstall,
-    [switch]$NoVerify
+    [switch]$NoVerify,
+    [ValidateSet('default', 'tsinghua', 'aliyun', 'ustc', 'tencent', 'pypi')]
+    [string]$Mirror = 'default'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -89,9 +96,29 @@ if (Test-UvAvailable) {
 
 Write-Step "2/4" "running 'uv sync' (creates .venv, installs deps + project)"
 
+# Pick a PyPI mirror. The default is whatever pyproject.toml declares
+# (Tsinghua). Pass `-Mirror pypi` to fall back to upstream, or one of
+# the other named China mirrors if Tsinghua is unreachable.
+$mirrorMap = @{
+    'tsinghua' = 'https://pypi.tuna.tsinghua.edu.cn/simple'
+    'aliyun'   = 'https://mirrors.aliyun.com/pypi/simple/'
+    'ustc'     = 'https://pypi.mirrors.ustc.edu.cn/simple/'
+    'tencent'  = 'https://mirrors.cloud.tencent.com/pypi/simple/'
+    'pypi'     = 'https://pypi.org/simple'
+}
+if ($Mirror -ne 'default') {
+    $mirrorUrl = $mirrorMap[$Mirror]
+    Write-Host "    using mirror: $Mirror ($mirrorUrl)" -ForegroundColor Yellow
+    # UV_DEFAULT_INDEX replaces whatever pyproject.toml declares as default.
+    $env:UV_DEFAULT_INDEX = $mirrorUrl
+} else {
+    Write-Host "    using mirror from pyproject.toml (Tsinghua by default)" -ForegroundColor Yellow
+    Write-Host "    if it stalls, retry with: .\setup.ps1 -Mirror aliyun" -ForegroundColor DarkGray
+}
+
 & uv sync
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "uv sync failed (exit $LASTEXITCODE). Re-run with -Verbose to see what broke."
+    Write-Error "uv sync failed (exit $LASTEXITCODE). Try a different mirror: .\setup.ps1 -Mirror aliyun"
     exit 1
 }
 Write-Ok ".venv ready, dependencies installed"
@@ -110,12 +137,17 @@ if (-not (Test-Path $templatePath)) {
 
 # JSON requires backslashes to be escaped, so emit \\ separators.
 $absForJson = $projectDir.Replace('\', '\\')
-$content = Get-Content -Raw -Path $templatePath
+
+# Read as UTF-8 explicitly. PowerShell 5.1's `Get-Content` defaults to the
+# system ANSI codepage (GBK on Chinese Windows), which mangles non-ASCII
+# characters in the template.
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+$content = [System.IO.File]::ReadAllText($templatePath, $utf8NoBom)
 $content = $content.Replace('{{PROJECT_DIR}}', $absForJson)
 
-# Write UTF-8 without BOM (PowerShell 5.1's `Set-Content -Encoding UTF8` adds BOM
-# which trips some JSON parsers).
-[System.IO.File]::WriteAllText($outPath, $content, [System.Text.UTF8Encoding]::new($false))
+# Write UTF-8 without BOM (PowerShell 5.1's `Set-Content -Encoding UTF8` adds
+# BOM which trips some JSON parsers).
+[System.IO.File]::WriteAllText($outPath, $content, $utf8NoBom)
 Write-Ok "wrote $outPath"
 
 # ----- 4. Verify imports -----

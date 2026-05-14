@@ -32,9 +32,17 @@ cd linux_board_mcp
 .\setup.ps1
 ```
 
+> **第一次跑 `.\setup.ps1` 报"禁止运行脚本"** —— 这是 Windows 默认执行策略拦的。三个解法选一个：
+> - 改用 `.\setup.bat`（已经内置 `-ExecutionPolicy Bypass`，最省事）
+> - 单次绕过：`powershell -ExecutionPolicy Bypass -File .\setup.ps1`
+> - 给当前用户永久放行本地脚本（推荐，只做一次）：`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
 参数：
 - `-SkipUvInstall` — uv 缺了直接报错，不自动安装
 - `-NoVerify` — 跳过最后的 import 自检
+- `-Mirror <name>` — 切换 PyPI 镜像，可选 `tsinghua` / `aliyun` / `ustc` / `tencent` / `pypi`（上游）/ `default`（用 pyproject.toml 里写的，默认是清华）
+
+> **国内用户注意**：本工程 [`pyproject.toml`](pyproject.toml) 默认走 **清华镜像**，安装速度从几小时降到几分钟。如果清华抽风，就 `.\setup.ps1 -Mirror aliyun`。如果你不在国内或者公司有自己的内部镜像，把 pyproject.toml 里 `[[tool.uv.index]]` 块改掉即可。
 
 跑完之后，项目目录长这样：
 
@@ -237,11 +245,32 @@ linux_board_mcp/
 | 干啥 | 命令 |
 |------|------|
 | 一键安装 / 重置 | `setup.bat` 或 `.\setup.ps1` |
+| 换镜像重装 | `.\setup.ps1 -Mirror aliyun` |
 | 加 / 升 / 删依赖 | `uv add <pkg>` / `uv lock --upgrade` / `uv remove <pkg>` |
 | 跑 server | `uv run python -m linux_board_mcp` |
 | 跑任意 Python 脚本 | `uv run python <script>` |
 | 进 venv shell（可选） | `uv venv` 然后 `.venv\Scripts\activate.ps1` |
 | 看 lock 状态 | `uv lock --check` |
+
+### 国内常用 PyPI 镜像
+
+| 名字 | URL | 备注 |
+|------|-----|------|
+| `tsinghua` | `https://pypi.tuna.tsinghua.edu.cn/simple` | **默认**，pyproject.toml 里写死 |
+| `aliyun`   | `https://mirrors.aliyun.com/pypi/simple/` | 阿里云，稳 |
+| `ustc`     | `https://pypi.mirrors.ustc.edu.cn/simple/` | 中科大 |
+| `tencent`  | `https://mirrors.cloud.tencent.com/pypi/simple/` | 腾讯 |
+| `pypi`     | `https://pypi.org/simple` | 上游，国内通常很慢 |
+
+如果你想全局换掉 uv 的默认源，也可以写 `%APPDATA%\uv\uv.toml`：
+
+```toml
+[[index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+```
+
+这样所有 uv 工程都走这个源，本工程的 pyproject.toml 设置无害冲突（同样指向清华）。
 
 ---
 
