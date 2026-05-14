@@ -1,289 +1,238 @@
 # linux_board_mcp
 
-让 Claude（或任何 MCP 客户端）直接连你的嵌入式 Linux 板子，自己跑命令、自己看输出、自己 debug。
+让 Claude（或任何 MCP 客户端）直接连你的嵌入式 Linux 板子，自己跑命令、自己看输出、自己 debug。不用再手动 ssh / adb shell + 复制粘贴。
 
-跟 [`docs/embedded-mcp-server-with-claude.md`](../docs/embedded-mcp-server-with-claude.md) 那篇文章的架构一致。这里是把它真的写出来。
-
-支持三种连接方式：
+支持三种连接方式，**同一份 server，env 切换**：
 
 | transport | 适用场景 | 后端 |
 |-----------|---------|------|
-| `ssh` | 板子有 sshd（最常见） | `asyncssh` |
-| `adb-usb` | 板子用 USB adb gadget | `adb` CLI |
+| `ssh` | 板子有 sshd（典型 i.MX / TI 嵌入式 Linux） | `asyncssh` |
+| `adb-usb` | 板子用 USB adb gadget（Rockchip / Allwinner / Android 设备） | `adb` CLI |
 | `adb-wifi` | 板子开了 adb-over-tcp | `adb` CLI |
 
-工程用 [uv](https://docs.astral.sh/uv/) 管理，提供一键安装脚本。
+> 已实测：**鲁班猫 LubanCat (RK 系列, Linux 4.19, aarch64) over adb-usb**。读 dmesg / sysfs / proc / IIO 全通。
+
+工程用 [uv](https://docs.astral.sh/uv/) 管理，**清华源默认走 PyPI 镜像**——国内安装从几小时降到几秒。
+
+技术细节 / 架构原理见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ---
 
-## 1. 一键安装（Windows）
+## 快速开始（Windows，5 步）
 
-**双击 [`setup.bat`](setup.bat)** —— 它会自动：
+### 1. 一键安装
 
-1. 检查 / 安装 `uv`（缺了就跑官方安装脚本）
-2. 跑 `uv sync` 建 `.venv` 并装齐依赖（`mcp`、`asyncssh`、本项目自身 editable）
-3. 用本机绝对路径生成 [`mcp.json`](mcp.json)（从 [`mcp.template.json`](mcp.template.json)）
-4. import 自检
-
-或者在 PowerShell 里直接跑：
+双击 [`setup.bat`](setup.bat)，或者 PowerShell：
 
 ```powershell
 cd linux_board_mcp
-.\setup.ps1
+.\setup.bat                          # 推荐
+# 或： .\setup.ps1                   # 需要先放行执行策略，见下文
 ```
 
-> **第一次跑 `.\setup.ps1` 报"禁止运行脚本"** —— 这是 Windows 默认执行策略拦的。三个解法选一个：
-> - 改用 `.\setup.bat`（已经内置 `-ExecutionPolicy Bypass`，最省事）
-> - 单次绕过：`powershell -ExecutionPolicy Bypass -File .\setup.ps1`
-> - 给当前用户永久放行本地脚本（推荐，只做一次）：`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+它会：检查/安装 `uv` → `uv sync` 建 `.venv` → 从模板生成 [`mcp.json`](mcp.json) → import 自检。
 
-参数：
-- `-SkipUvInstall` — uv 缺了直接报错，不自动安装
-- `-NoVerify` — 跳过最后的 import 自检
-- `-Mirror <name>` — 切换 PyPI 镜像，可选 `tsinghua` / `aliyun` / `ustc` / `tencent` / `pypi`（上游）/ `default`（用 pyproject.toml 里写的，默认是清华）
+第一次跑约 **10-30 秒**。
 
-> **国内用户注意**：本工程 [`pyproject.toml`](pyproject.toml) 默认走 **清华镜像**，安装速度从几小时降到几分钟。如果清华抽风，就 `.\setup.ps1 -Mirror aliyun`。如果你不在国内或者公司有自己的内部镜像，把 pyproject.toml 里 `[[tool.uv.index]]` 块改掉即可。
+> 如果 `.\setup.ps1` 报 "禁止运行脚本"：用 `.\setup.bat`，或 `powershell -ExecutionPolicy Bypass -File .\setup.ps1`，或一次性放行：`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 
-跑完之后，项目目录长这样：
+### 2. 选 transport，改 `mcp.json`
 
-```
-linux_board_mcp/
-├── .venv/               ← uv 创建
-├── uv.lock              ← uv 生成（可以 commit）
-├── mcp.json             ← 自动生成（已 gitignore，含本机绝对路径）
-├── mcp.template.json    ← 模板（可以 commit）
-├── setup.ps1 / setup.bat
-└── ...
+打开 [`mcp.json`](mcp.json)，里面三套预置 server。**只改你要用的那套的 `env`**：
+
+**SSH**：
+
+```json
+"BOARD_HOST": "192.168.x.x",
+"BOARD_USER": "root",
+"BOARD_KEY":  "C:\\Users\\你\\.ssh\\board_rsa"
 ```
 
-> ADB 模式还需要 [Android Platform Tools](https://developer.android.com/tools/releases/platform-tools) 提供的 `adb.exe` 在 PATH 上（或者用 `ADB_BINARY` 指路）。setup 不管这个。
+**ADB USB**：先 `adb devices -l` 找 serial，填进去：
 
----
+```json
+"ADB_SERIAL": "5c5ec7023ef0356e"
+```
 
-## 2. 挂到 Claude Code
+**ADB WiFi**：板子上先开 `adb tcpip 5555`，然后：
 
-[`mcp.json`](mcp.json) 在本目录、**没有放全局**。里面三套 server：
+```json
+"ADB_WIFI_HOST": "192.168.x.x",
+"ADB_WIFI_PORT": "5555"
+```
 
-- `linux-board-ssh`
-- `linux-board-adb-usb`
-- `linux-board-adb-wifi`
+> JSON 里 Windows 路径用 `\\`。
 
-两种挂法任选：
-
-### 方式 A：项目级 `.mcp.json`（推荐）
+### 3. 烟雾测试（不挂 Claude）
 
 ```powershell
-# 在你的嵌入式项目根目录
-Copy-Item "linux_board_mcp\mcp.json" .mcp.json
-```
-
-然后改 `.mcp.json` 里 `BOARD_HOST` / `BOARD_KEY` / `ADB_WIFI_HOST` 等指向你的板子。
-
-### 方式 B：临时挂
-
-```powershell
-claude --mcp-config "linux_board_mcp\mcp.json"
-```
-
-### 工程目录搬家了怎么办
-
-重新跑 `setup.ps1` 即可，`mcp.json` 里的绝对路径会被刷新。
-
----
-
-## 3. 配置（按 transport 选一份）
-
-每个 transport 都有一份 `.env.example`：
-
-- [examples/ssh.env.example](examples/ssh.env.example)
-- [examples/adb-usb.env.example](examples/adb-usb.env.example)
-- [examples/adb-wifi.env.example](examples/adb-wifi.env.example)
-
-环境变量也可以直接写在 `mcp.json` 的 `env` 块里（推荐）——`uv run` 在跑 server 前会把这些注入子进程。
-
-### 关键变量
-
-| 变量 | 默认 | 说明 |
-|------|------|------|
-| `BOARD_TRANSPORT` | `ssh` | `ssh` / `adb-usb` / `adb-wifi` |
-| `BOARD_NAME` | `linux-board` | 在 MCP 客户端里显示的名字 |
-| `BOARD_HOST` | `192.168.7.2` | SSH 主机 |
-| `BOARD_PORT` | `22` | SSH 端口 |
-| `BOARD_USER` | `root` | SSH 用户名 |
-| `BOARD_KEY` | — | SSH key 路径 |
-| `BOARD_PASSWORD` | — | SSH 密码（建议用 key） |
-| `ADB_BINARY` | `adb` | adb 二进制路径 |
-| `ADB_SERIAL` | — | adb-usb 多设备时选目标（`adb devices -l` 看 serial） |
-| `ADB_WIFI_HOST` | — | adb-wifi 必填 |
-| `ADB_WIFI_PORT` | `5555` | adb-wifi 端口 |
-| `BOARD_TIMEOUT` | `15` | 单条命令超时（秒） |
-| `BOARD_AUDIT_LOG` | `~/.linux_board_mcp/audit.log` | 审计日志路径 |
-| `BOARD_EXTRA_SHELL_PREFIXES` | — | 给 `run_shell` 加额外的 allow-list 前缀，逗号分隔 |
-
----
-
-## 4. 工具清单
-
-### 只读（默认无需确认）
-
-| tool | 干什么 |
-|------|--------|
-| `board_info` | uname + uptime + transport 描述 |
-| `read_dmesg(lines, grep)` | dmesg tail，可 grep |
-| `read_sysfs(path)` | 读 `/sys/` 下的文件（白名单内） |
-| `read_proc(path)` | 读 `/proc/` |
-| `list_dir(path, long)` | `ls` |
-| `lsmod()` | 列模块 |
-| `modinfo(module)` | 模块元信息 |
-| `read_gpio(n)` | 读 legacy sysfs GPIO |
-| `read_iio(device, channel)` | 读 IIO 通道（支持按 name 查找） |
-| `dump_devicetree(subpath)` | 列 `/proc/device-tree` 节点 |
-| `run_shell(cmd)` | allow-list 内的 shell 命令 |
-
-### 破坏性（**强烈建议在 MCP 客户端里要求每次确认**）
-
-| tool | 干什么 |
-|------|--------|
-| `install_module(ko_path, params)` | 把开发机上的 .ko 推到板子并 insmod |
-| `remove_module(name)` | rmmod |
-| `write_sysfs(path, value)` | 写 sysfs（写白名单内） |
-| `set_gpio(n, value)` | 拉 GPIO |
-| `export_gpio(n, direction)` | 导出 GPIO + 设方向 |
-| `reboot_board(force)` | 重启（force=True 用 SysRq） |
-
-Claude Code 默认所有 MCP 工具调用都问一遍——足够安全。如果你嫌烦把只读工具加进 `.claude/settings.json` 的 `permissions.allow`、把破坏性工具留在 `ask`。
-
----
-
-## 5. 工具调用样例
-
-挂好之后，在 Claude Code 里直接说话：
-
-```
-你：看一下板子上最近的 dmesg
-（Claude 调 read_dmesg）
-
-你：ads1256 这个驱动 probe 失败了，帮我分析
-（Claude 自己调 read_dmesg + read_sysfs + dump_devicetree）
-
-你：把我刚编的 ads1256.ko 加载上
-（Claude 调 install_module → 等你 approve → 调 read_dmesg 看结果）
-```
-
----
-
-## 6. 安全设计
-
-按 [那篇文章](../docs/embedded-mcp-server-with-claude.md) 第六节的铁律实现：
-
-1. **默认拒绝，白名单放行** —— [`safety.py`](src/linux_board_mcp/safety.py) 里有 `ALLOW_SHELL_PREFIXES`、`SYSFS_READ_ROOTS`、`SYSFS_WRITE_ROOTS` 三套白名单
-2. **写操作必须经过 permission prompt** —— 由 MCP 客户端负责，工具 docstring 带 `DESTRUCTIVE:` 提示让客户端识别
-3. **路径必须 sanitize** —— 所有路径走 `safety.check_path()`，禁绝对路径之外、`..`、控制字符
-4. **审计日志** —— 每次调用追加一行 JSON 到 `BOARD_AUDIT_LOG`
-5. **生产板子上别接 MCP** —— 这条由你自觉
-6. **危险命令显式禁止** —— `DENY_PATTERNS` 拦 `rm` / `dd` / `mkfs` / `fastboot` / `fuse` 等；`HIGH_RISK_SYSFS_FRAGMENTS` 拦 `cpufreq/scaling_max_freq` / `watchdog/disable` 等
-
----
-
-## 7. 不挂 Claude 单独跑一下
-
-```powershell
-cd linux_board_mcp
-$env:BOARD_TRANSPORT = "ssh"
-$env:BOARD_HOST = "192.168.7.2"
-$env:BOARD_USER = "root"
-$env:BOARD_KEY  = "$env:USERPROFILE\.ssh\board_rsa"
+cd e:\立芯\知识星球\linux_board_mcp
 uv run python -m linux_board_mcp
 ```
 
-stderr 应该出现：
+stderr 看到这行就对：
 
 ```
-[linux_board_mcp] ready: name=linux-board target=ssh://root@192.168.7.2:22
+[linux_board_mcp] ready: name=linux-board-adb-usb target=adb-usb://5c5ec7023ef0356e
 ```
 
-然后它等 MCP client 通过 stdio 连接。Ctrl+C 退出。
-
-功能性测试推荐用 [MCP Inspector](https://github.com/modelcontextprotocol/inspector)：
+Ctrl+C 退出。要更彻底地手动调工具，用 MCP Inspector：
 
 ```powershell
 npx @modelcontextprotocol/inspector uv run python -m linux_board_mcp
 ```
 
----
+### 4. 挂到 Claude Code
 
-## 8. 项目布局
+**项目级（推荐）**——拷成你嵌入式项目根目录的 `.mcp.json`：
 
-```
-linux_board_mcp/
-├── setup.ps1 / setup.bat          # 一键安装
-├── mcp.template.json              # mcp.json 的模板（commit）
-├── mcp.json                       # 一键安装后生成（gitignore）
-├── pyproject.toml                 # uv 读它
-├── uv.lock                        # uv sync 生成
-├── README.md
-├── examples/                      # 三种 transport 的 .env 模板
-└── src/linux_board_mcp/
-    ├── __main__.py                # python -m linux_board_mcp
-    ├── config.py                  # 环境变量 → Config dataclass
-    ├── server.py                  # FastMCP tool 注册
-    ├── safety.py                  # 白名单 / 黑名单 / 路径校验
-    ├── audit.py                   # 审计日志
-    ├── transports/
-    │   ├── base.py                # Transport ABC + CommandResult
-    │   ├── ssh.py                 # SSH 实现（asyncssh）
-    │   └── adb.py                 # ADB 实现（subprocess，USB + WiFi）
-    └── tools/
-        ├── readonly.py
-        └── writable.py
+```powershell
+cd <你的嵌入式项目>
+Copy-Item e:\立芯\知识星球\linux_board_mcp\mcp.json .mcp.json
 ```
 
+**临时挂**：
+
+```powershell
+claude --mcp-config "e:\立芯\知识星球\linux_board_mcp\mcp.json"
+```
+
+### 5. 用起来
+
+挂上后，在 Claude Code 里直接说话：
+
+```
+你：看一下板子最近 20 行 dmesg
+（Claude 调 read_dmesg）
+
+你：lsmod 看看
+（Claude 调 lsmod）
+
+你：把我刚编的 dht11.ko 推上去 insmod
+（Claude 调 install_module → 你 approve → 调 read_dmesg 验证）
+```
+
 ---
 
-## 9. 日常命令速查
+## 工具清单
+
+### 只读（默认无需确认）
+
+| tool | 干什么 |
+|------|--------|
+| `board_info` | uname + uptime + transport 描述（先调这个验证连通） |
+| `read_dmesg(lines, grep)` | dmesg tail，可 grep |
+| `read_sysfs(path)` | 读 `/sys/`（白名单内） |
+| `read_proc(path)` | 读 `/proc/` |
+| `list_dir(path, long)` | `ls` |
+| `lsmod()` / `modinfo(module)` | 内核模块 |
+| `read_gpio(n)` | 读 legacy sysfs GPIO |
+| `read_iio(device, channel)` | 读 IIO 通道（支持按 name 查找） |
+| `dump_devicetree(subpath)` | 列 `/proc/device-tree` 节点 |
+| `run_shell(cmd)` | allow-list 内的 shell 命令 |
+
+### 破坏性（MCP 客户端会要求每次 approve）
+
+| tool | 干什么 |
+|------|--------|
+| `install_module(ko_path, params)` | 推 .ko 到板子并 insmod |
+| `remove_module(name)` | rmmod |
+| `write_sysfs(path, value)` | 写 sysfs（写白名单内） |
+| `set_gpio(n, value)` / `export_gpio(n, direction)` | 操作 GPIO |
+| `reboot_board(force)` | 重启 |
+
+详细的工具签名、安全约束、扩展方式 → [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+---
+
+## 关键环境变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `BOARD_TRANSPORT` | `ssh` | `ssh` / `adb-usb` / `adb-wifi` |
+| `BOARD_NAME` | `linux-board` | MCP 客户端里显示的名字 |
+| `BOARD_HOST` / `BOARD_PORT` / `BOARD_USER` / `BOARD_KEY` / `BOARD_PASSWORD` | — | SSH 参数 |
+| `ADB_BINARY` | `adb` | adb 路径（不在 PATH 就写绝对路径） |
+| `ADB_SERIAL` | — | adb-usb 多设备时锁定目标 |
+| `ADB_WIFI_HOST` / `ADB_WIFI_PORT` | — / `5555` | adb-wifi 必填 |
+| `BOARD_TIMEOUT` | `15` | 单命令超时（秒） |
+| `BOARD_AUDIT_LOG` | `~/.linux_board_mcp/audit.log` | 审计日志 |
+| `BOARD_EXTRA_SHELL_PREFIXES` | — | `run_shell` 额外允许的前缀，逗号分隔 |
+
+完整模板见 `examples/*.env.example`。
+
+---
+
+## 常见故障
+
+| 现象 | 原因 / 解法 |
+|------|------|
+| `.\setup.ps1` 禁止运行 | 用 `.\setup.bat`，或 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| `uv sync` 卡死 / 几十分钟没动 | 镜像问题，换一个：`.\setup.ps1 -Mirror aliyun`（可选 `tsinghua` / `aliyun` / `ustc` / `tencent` / `pypi`） |
+| `adb` 找不到 | 装 [Android Platform Tools](https://developer.android.com/tools/releases/platform-tools)，或把 `ADB_BINARY` 改成绝对路径如 `D:\\platform-tools\\adb.exe` |
+| `adb devices` 一直 offline / unauthorized | 板子上没接受 USB 调试授权 / 没切 USB 模式到 adb |
+| Claude 调工具卡住 | 看 audit.log；ssh 模式常见是 `known_hosts` 或 key passphrase 卡住——用免密码 key |
+| `read_dmesg` 返回 `Operation not permitted` | adb shell 不是 root，要么 `adb root`，要么换 ssh 用 root 登录 |
+| 工程目录搬家 | 重跑 `setup.bat`，mcp.json 里的绝对路径会刷新 |
+
+---
+
+## 日常命令速查
 
 | 干啥 | 命令 |
 |------|------|
-| 一键安装 / 重置 | `setup.bat` 或 `.\setup.ps1` |
+| 一键安装 / 重置 | `.\setup.bat` |
 | 换镜像重装 | `.\setup.ps1 -Mirror aliyun` |
 | 加 / 升 / 删依赖 | `uv add <pkg>` / `uv lock --upgrade` / `uv remove <pkg>` |
-| 跑 server | `uv run python -m linux_board_mcp` |
-| 跑任意 Python 脚本 | `uv run python <script>` |
-| 进 venv shell（可选） | `uv venv` 然后 `.venv\Scripts\activate.ps1` |
-| 看 lock 状态 | `uv lock --check` |
+| 跑 server（本地调试） | `uv run python -m linux_board_mcp` |
+| 进 venv shell | `.venv\Scripts\activate.ps1` |
+| 看审计日志 | `Get-Content audit.log -Wait` |
 
-### 国内常用 PyPI 镜像
+---
 
-| 名字 | URL | 备注 |
-|------|-----|------|
-| `tsinghua` | `https://pypi.tuna.tsinghua.edu.cn/simple` | **默认**，pyproject.toml 里写死 |
-| `aliyun`   | `https://mirrors.aliyun.com/pypi/simple/` | 阿里云，稳 |
-| `ustc`     | `https://pypi.mirrors.ustc.edu.cn/simple/` | 中科大 |
-| `tencent`  | `https://mirrors.cloud.tencent.com/pypi/simple/` | 腾讯 |
-| `pypi`     | `https://pypi.org/simple` | 上游，国内通常很慢 |
+## 项目布局
 
-如果你想全局换掉 uv 的默认源，也可以写 `%APPDATA%\uv\uv.toml`：
-
-```toml
-[[index]]
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
+```
+linux_board_mcp/
+├── setup.ps1 / setup.bat          # 一键安装入口
+├── mcp.template.json              # mcp.json 模板（commit）
+├── mcp.json                       # 一键安装后生成（gitignore，含本机绝对路径）
+├── pyproject.toml                 # uv 读它，含清华镜像配置
+├── uv.lock                        # uv sync 生成（可 commit）
+├── README.md
+├── ARCHITECTURE.md                # 技术框架 + 实现原理
+├── examples/                      # 三种 transport 的 .env 模板
+└── src/linux_board_mcp/
+    ├── __main__.py / server.py / config.py / safety.py / audit.py
+    ├── transports/                # base / ssh / adb（USB + WiFi）
+    └── tools/                     # readonly / writable
 ```
 
-这样所有 uv 工程都走这个源，本工程的 pyproject.toml 设置无害冲突（同样指向清华）。
+---
+
+## 我想……
+
+| 想做的事 | 看哪 |
+|---------|------|
+| 改某个工具的行为 | [src/linux_board_mcp/tools/](src/linux_board_mcp/tools/) + [ARCHITECTURE.md §6](ARCHITECTURE.md#6-工具实现模式) |
+| 加一个新工具 | [ARCHITECTURE.md §6 + §9](ARCHITECTURE.md#9-怎么扩展) |
+| 加一个新 transport（比如 telnet / serial） | [ARCHITECTURE.md §4](ARCHITECTURE.md#4-transport-抽象) |
+| 放宽 `run_shell` 的白名单 | 改 [`safety.py`](src/linux_board_mcp/safety.py) 或设 `BOARD_EXTRA_SHELL_PREFIXES` |
+| 接 CI / 跑自动回归 | 参考 [docs/mcp-hardware-regression-testing.md](../docs/mcp-hardware-regression-testing.md) 的 pytest-mcp 模式 |
+| 出故障想看审计 | `Get-Content audit.log -Wait` |
 
 ---
 
-## 10. 已知限制
+## 限制
 
-- **`run_shell` 的 allow-list 是死的**——遇到不在 list 里的命令要么编辑 [`safety.py`](src/linux_board_mcp/safety.py)、要么用 `BOARD_EXTRA_SHELL_PREFIXES` 加进来
-- **ADB exit code**：老版本 adb (<23) 不透传远端 exit code，所有 `adb shell` 命令的 rc 看起来都是 0。判断成功 / 失败请看 stdout / stderr 内容
-- **`capture_serial` 没实现**：串口抓取依赖外接 USB-UART，跟 transport 正交，下个版本单独加
-- **没有 `flash_image`**：dd 块设备风险太大，故意不提供——量产场景请走专用刷机工具
-- **工程目录搬家**：mcp.json 里有绝对路径，搬目录后重跑 `setup.ps1`
+- **`run_shell` 白名单是死的**：用 `BOARD_EXTRA_SHELL_PREFIXES` 临时加，长期就改 `safety.py`
+- **ADB exit code**：老版本 adb (<23) 不透传远端 exit code，rc 看起来都是 0。判断成功 / 失败请看 stdout / stderr 内容
+- **没有 `capture_serial`**：抓 USB-UART 跟 transport 正交，未实现
+- **没有 `flash_image`**：dd 块设备风险太大，故意不提供
+- **mcp.json 含绝对路径**：搬目录后必须重跑 `setup.bat`
 
 ---
 
-## 11. License
+## License
 
-MIT（按需要改）。
+MIT
