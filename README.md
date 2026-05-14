@@ -66,7 +66,7 @@ linux_board_mcp/
 
 ```powershell
 # 在你的嵌入式项目根目录
-Copy-Item "e:\立芯\知识星球\linux_board_mcp\mcp.json" .mcp.json
+Copy-Item "linux_board_mcp\mcp.json" .mcp.json
 ```
 
 然后改 `.mcp.json` 里 `BOARD_HOST` / `BOARD_KEY` / `ADB_WIFI_HOST` 等指向你的板子。
@@ -74,7 +74,7 @@ Copy-Item "e:\立芯\知识星球\linux_board_mcp\mcp.json" .mcp.json
 ### 方式 B：临时挂
 
 ```powershell
-claude --mcp-config "e:\立芯\知识星球\linux_board_mcp\mcp.json"
+claude --mcp-config "linux_board_mcp\mcp.json"
 ```
 
 ### 工程目录搬家了怎么办
@@ -180,7 +180,7 @@ Claude Code 默认所有 MCP 工具调用都问一遍——足够安全。如果
 ## 7. 不挂 Claude 单独跑一下
 
 ```powershell
-cd e:\立芯\知识星球\linux_board_mcp
+cd linux_board_mcp
 $env:BOARD_TRANSPORT = "ssh"
 $env:BOARD_HOST = "192.168.7.2"
 $env:BOARD_USER = "root"
