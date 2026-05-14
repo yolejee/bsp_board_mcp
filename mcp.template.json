@@ -1,0 +1,65 @@
+{
+  "_comment": "Template — DO NOT edit absolute paths by hand. Run setup.ps1 to regenerate mcp.json with {{PROJECT_DIR}} replaced. Edit env values below to point at your board.",
+  "mcpServers": {
+    "linux-board-ssh": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "{{PROJECT_DIR}}",
+        "run",
+        "python",
+        "-m",
+        "linux_board_mcp"
+      ],
+      "env": {
+        "BOARD_NAME": "linux-board-ssh",
+        "BOARD_TRANSPORT": "ssh",
+        "BOARD_HOST": "192.168.7.2",
+        "BOARD_PORT": "22",
+        "BOARD_USER": "root",
+        "BOARD_KEY": "${USERPROFILE}\\.ssh\\board_rsa",
+        "BOARD_TIMEOUT": "15",
+        "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log"
+      }
+    },
+    "linux-board-adb-usb": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "{{PROJECT_DIR}}",
+        "run",
+        "python",
+        "-m",
+        "linux_board_mcp"
+      ],
+      "env": {
+        "BOARD_NAME": "linux-board-adb-usb",
+        "BOARD_TRANSPORT": "adb-usb",
+        "ADB_BINARY": "adb",
+        "ADB_SERIAL": "",
+        "BOARD_TIMEOUT": "15",
+        "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log"
+      }
+    },
+    "linux-board-adb-wifi": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "{{PROJECT_DIR}}",
+        "run",
+        "python",
+        "-m",
+        "linux_board_mcp"
+      ],
+      "env": {
+        "BOARD_NAME": "linux-board-adb-wifi",
+        "BOARD_TRANSPORT": "adb-wifi",
+        "ADB_BINARY": "adb",
+        "ADB_WIFI_HOST": "192.168.7.2",
+        "ADB_WIFI_PORT": "5555",
+        "BOARD_TIMEOUT": "15",
+        "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log"
+      }
+    }
+  }
+}
