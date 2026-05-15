@@ -66,7 +66,7 @@ cd linux_board_mcp
 ### 3. 烟雾测试（不挂 Claude）
 
 ```powershell
-cd e:\立芯\知识星球\linux_board_mcp
+cd e:\linux_board_mcp
 uv run python -m linux_board_mcp
 ```
 
@@ -88,13 +88,13 @@ npx @modelcontextprotocol/inspector uv run python -m linux_board_mcp
 
 ```powershell
 cd <你的嵌入式项目>
-Copy-Item e:\立芯\知识星球\linux_board_mcp\mcp.json .mcp.json
+Copy-Item e:\linux_board_mcp\mcp.json .mcp.json
 ```
 
 **临时挂**：
 
 ```powershell
-claude --mcp-config "e:\立芯\知识星球\linux_board_mcp\mcp.json"
+claude --mcp-config "e:\linux_board_mcp\mcp.json"
 ```
 
 ### 5. 用起来
