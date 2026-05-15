@@ -12,31 +12,59 @@
 
 > 已实测：**鲁班猫 LubanCat (RK 系列, Linux 4.19, aarch64) over adb-usb**。读 dmesg / sysfs / proc / IIO 全通。
 
-工程用 [uv](https://docs.astral.sh/uv/) 管理，**清华源默认走 PyPI 镜像**——国内安装从几小时降到几秒。
+工程用 [uv](https://docs.astral.sh/uv/) 管理，**默认走清华 PyPI 镜像**——国内安装从几小时降到几秒。
 
-技术细节 / 架构原理见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+为什么不直接用 adb / ssh，要套一层 MCP？见 [docs/mcp-server-vs-raw-adb.md](docs/mcp-server-vs-raw-adb.md)。
+技术细节 / 架构原理见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ---
 
-## 快速开始（Windows，5 步）
+## 前置条件
 
-### 1. 一键安装
+安装脚本面向 **Windows**（PowerShell）。开始前确认下面这几样：
 
-双击 [`setup.bat`](setup.bat)，或者 PowerShell：
+| 需要 | 用途 | 怎么拿 |
+|------|------|--------|
+| Windows 10 / 11 | `setup.bat` / `setup.ps1` 是 Windows 脚本 | — |
+| Git | 克隆本仓库（不装也行，见步骤 1） | [git-scm.com](https://git-scm.com/download/win) |
+| Claude Code | 真正调用这些工具的 MCP 客户端 | [安装文档](https://docs.claude.com/claude-code) |
+| `adb` | **仅 `adb-usb` / `adb-wifi` 需要**，`ssh` 方式不用 | [Android Platform Tools](https://developer.android.com/tools/releases/platform-tools)，解压后把目录加进 PATH |
+
+> **不用预装 Python。** `setup.bat` 会自动装 `uv`，`uv` 再自动拉一个合适的 Python（本项目需 ≥ 3.10）。
+>
+> 非 Windows 用户：手动跑 `uv sync`，再照 [`mcp.template.json`](mcp.template.json) 把 `{{PROJECT_DIR}}` 替换成本机绝对路径、另存为 `mcp.json` 即可。
+
+---
+
+## 快速开始（Windows · 6 步）
+
+### 1. 拿到代码
 
 ```powershell
+git clone <你的 GitHub 仓库地址>
 cd linux_board_mcp
-.\setup.bat                          # 推荐
-# 或： .\setup.ps1                   # 需要先放行执行策略，见下文
 ```
 
-它会：检查/安装 `uv` → `uv sync` 建 `.venv` → 从模板生成 [`mcp.json`](mcp.json) → import 自检。
+> 没装 Git：在 GitHub 仓库页点 `Code → Download ZIP`，解压后用 PowerShell `cd` 进解压出来的目录。
+> 后面所有命令都在这个项目目录里执行。
 
-第一次跑约 **10-30 秒**。
+### 2. 一键安装
 
-> 如果 `.\setup.ps1` 报 "禁止运行脚本"：用 `.\setup.bat`，或 `powershell -ExecutionPolicy Bypass -File .\setup.ps1`，或一次性放行：`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+双击 [`setup.bat`](setup.bat)，或在 PowerShell 里：
 
-### 2. 选 transport，改 `mcp.json`
+```powershell
+.\setup.bat                          # 推荐
+# 或： .\setup.ps1                   # 需先放行执行策略，见下方提示
+```
+
+它会：检查 / 安装 `uv` → `uv sync` 建 `.venv` 装依赖 → 从模板生成 [`mcp.json`](mcp.json) → import 自检。
+
+第一次约 **10-30 秒**（走清华镜像）。结尾打印 `linux_board_mcp setup complete` 就成功了——记下它同时打印的 `Config file:` 路径，第 5 步要用。
+
+> - `.\setup.ps1` 报"禁止运行脚本"：改用 `.\setup.bat`，或 `powershell -ExecutionPolicy Bypass -File .\setup.ps1`，或一次性放行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`。
+> - `uv sync` 卡住不动：换镜像 `.\setup.ps1 -Mirror aliyun`（可选 `tsinghua` / `aliyun` / `ustc` / `tencent` / `pypi`）。
+
+### 3. 选 transport，改 `mcp.json`
 
 打开 [`mcp.json`](mcp.json)，里面三套预置 server。**只改你要用的那套的 `env`**：
 
@@ -48,7 +76,7 @@ cd linux_board_mcp
 "BOARD_KEY":  "C:\\Users\\你\\.ssh\\board_rsa"
 ```
 
-**ADB USB**：先 `adb devices -l` 找 serial，填进去：
+**ADB USB**：先 `adb devices -l` 找 serial，填进去（只插一台板子时可留空）：
 
 ```json
 "ADB_SERIAL": "5c5ec7023ef0356e"
@@ -61,12 +89,13 @@ cd linux_board_mcp
 "ADB_WIFI_PORT": "5555"
 ```
 
-> JSON 里 Windows 路径用 `\\`。
+> JSON 里 Windows 路径用 `\\`（双反斜杠）。
 
-### 3. 烟雾测试（不挂 Claude）
+### 4. 烟雾测试（不挂 Claude，先验证 server 能起来）
+
+在项目目录里：
 
 ```powershell
-cd e:\linux_board_mcp
 uv run python -m linux_board_mcp
 ```
 
@@ -76,32 +105,37 @@ stderr 看到这行就对：
 [linux_board_mcp] ready: name=linux-board-adb-usb target=adb-usb://5c5ec7023ef0356e
 ```
 
-Ctrl+C 退出。要更彻底地手动调工具，用 MCP Inspector：
+`Ctrl+C` 退出。想更彻底地手动点工具，用 MCP Inspector：
 
 ```powershell
 npx @modelcontextprotocol/inspector uv run python -m linux_board_mcp
 ```
 
-### 4. 挂到 Claude Code
+### 5. 挂到 Claude Code
 
-**项目级（推荐）**——拷成你嵌入式项目根目录的 `.mcp.json`：
+`mcp.json` 里写的是绝对路径，所以挂载时要用 **linux_board_mcp 的完整路径**（就是第 2 步 `setup.bat` 打印的 `Config file:`）。下文用 `<linux_board_mcp路径>` 代指它。
+
+**项目级（推荐）**——把 `mcp.json` 拷成你嵌入式项目根目录的 `.mcp.json`：
 
 ```powershell
 cd <你的嵌入式项目>
-Copy-Item e:\linux_board_mcp\mcp.json .mcp.json
+Copy-Item <linux_board_mcp路径>\mcp.json .mcp.json
 ```
 
 **临时挂**：
 
 ```powershell
-claude --mcp-config "e:\linux_board_mcp\mcp.json"
+claude --mcp-config "<linux_board_mcp路径>\mcp.json"
 ```
 
-### 5. 用起来
+### 6. 用起来
 
 挂上后，在 Claude Code 里直接说话：
 
 ```
+你：调 board_info 看一下连上没有
+（Claude 调 board_info，回 uname + uptime —— 先用这个确认连通）
+
 你：看一下板子最近 20 行 dmesg
 （Claude 调 read_dmesg）
 
@@ -141,7 +175,7 @@ claude --mcp-config "e:\linux_board_mcp\mcp.json"
 | `set_gpio(n, value)` / `export_gpio(n, direction)` | 操作 GPIO |
 | `reboot_board(force)` | 重启 |
 
-详细的工具签名、安全约束、扩展方式 → [ARCHITECTURE.md](ARCHITECTURE.md)。
+详细的工具签名、安全约束、扩展方式 → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ---
 
@@ -159,7 +193,7 @@ claude --mcp-config "e:\linux_board_mcp\mcp.json"
 | `BOARD_AUDIT_LOG` | `~/.linux_board_mcp/audit.log` | 审计日志 |
 | `BOARD_EXTRA_SHELL_PREFIXES` | — | `run_shell` 额外允许的前缀，逗号分隔 |
 
-完整模板见 `examples/*.env.example`。
+完整模板见 [`examples/`](examples/) 下三个 `.env.example`。
 
 ---
 
@@ -195,12 +229,14 @@ claude --mcp-config "e:\linux_board_mcp\mcp.json"
 ```
 linux_board_mcp/
 ├── setup.ps1 / setup.bat          # 一键安装入口
-├── mcp.template.json              # mcp.json 模板（commit）
+├── mcp.template.json              # mcp.json 模板（已 commit）
 ├── mcp.json                       # 一键安装后生成（gitignore，含本机绝对路径）
 ├── pyproject.toml                 # uv 读它，含清华镜像配置
-├── uv.lock                        # uv sync 生成（可 commit）
+├── uv.lock                        # uv sync 生成（已 commit，锁定依赖版本）
 ├── README.md
-├── ARCHITECTURE.md                # 技术框架 + 实现原理
+├── docs/
+│   ├── ARCHITECTURE.md            # 技术框架 + 实现原理
+│   └── mcp-server-vs-raw-adb.md   # 为什么用 MCP 而不是裸 adb
 ├── examples/                      # 三种 transport 的 .env 模板
 └── src/linux_board_mcp/
     ├── __main__.py / server.py / config.py / safety.py / audit.py
@@ -214,11 +250,10 @@ linux_board_mcp/
 
 | 想做的事 | 看哪 |
 |---------|------|
-| 改某个工具的行为 | [src/linux_board_mcp/tools/](src/linux_board_mcp/tools/) + [ARCHITECTURE.md §6](ARCHITECTURE.md#6-工具实现模式) |
-| 加一个新工具 | [ARCHITECTURE.md §6 + §9](ARCHITECTURE.md#9-怎么扩展) |
-| 加一个新 transport（比如 telnet / serial） | [ARCHITECTURE.md §4](ARCHITECTURE.md#4-transport-抽象) |
+| 改某个工具的行为 | [src/linux_board_mcp/tools/](src/linux_board_mcp/tools/) + [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §6 工具实现模式 |
+| 加一个新工具 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §6 + §9 怎么扩展 |
+| 加一个新 transport（比如 telnet / serial） | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4 transport 抽象 |
 | 放宽 `run_shell` 的白名单 | 改 [`safety.py`](src/linux_board_mcp/safety.py) 或设 `BOARD_EXTRA_SHELL_PREFIXES` |
-| 接 CI / 跑自动回归 | 参考 [docs/mcp-hardware-regression-testing.md](../docs/mcp-hardware-regression-testing.md) 的 pytest-mcp 模式 |
 | 出故障想看审计 | `Get-Content audit.log -Wait` |
 
 ---
