@@ -10,6 +10,10 @@ __pycache__/
 # absolute paths, so don't commit it.
 mcp.json
 
+# Per-workspace MCP registration for Claude Code — also contains a
+# machine-local absolute path, so don't commit it.
+.mcp.json
+
 # Local environment overrides
 .env
 
