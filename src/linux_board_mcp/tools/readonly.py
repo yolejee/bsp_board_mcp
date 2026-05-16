@@ -8,8 +8,11 @@ them and can recover.
 
 from __future__ import annotations
 
+import os
+
 from .. import safety
 from ..audit import AuditLog
+from ..transports.adb import AdbTransport
 from ..transports.base import Transport, TransportError
 
 
@@ -43,9 +46,13 @@ class ReadOnlyTools:
             grep: optional extended regex to filter lines.
         """
         lines = max(1, min(int(lines), 5000))
-        cmd = f"dmesg | tail -n {lines}"
         if grep:
-            cmd += f" | grep -E {safety.quote(grep)}"
+            # grep the whole buffer FIRST, then tail — so `lines` caps the
+            # number of matches shown. (Tailing first would make grep only
+            # see the last `lines` lines and miss early-boot messages.)
+            cmd = f"dmesg | grep -E {safety.quote(grep)} | tail -n {lines}"
+        else:
+            cmd = f"dmesg | tail -n {lines}"
         return await self._run(cmd, tool="read_dmesg", args={"lines": lines, "grep": grep})
 
     # ----- generic sysfs/proc/dir read -----
@@ -131,7 +138,8 @@ class ReadOnlyTools:
             # Try to look up by 'name' file.
             lookup = (
                 'for d in /sys/bus/iio/devices/iio:device*; do '
-                f'  [ "$(cat "$d/name" 2>/dev/null)" = {safety.quote(device)} ] && echo "$d" && break; '
+                f'  [ "$(cat "$d/name" 2>/dev/null)" = {safety.quote(device)} ]'
+                ' && echo "$d" && break; '
                 "done"
             )
             try:
@@ -191,9 +199,63 @@ class ReadOnlyTools:
             uname = await self.t.run("uname -a", timeout=5)
             uptime = await self.t.run("uptime", timeout=5)
         except TransportError as e:
-            return f"BOARD_UNREACHABLE: {e}"
-        return (
+            msg = f"BOARD_UNREACHABLE: {e}"
+            self.audit.write("board_info", {}, msg, ok=False)
+            return msg
+        out = (
             f"transport: {self.t.describe()}\n"
             f"uname: {uname.stdout.strip()}\n"
             f"uptime: {uptime.stdout.strip()}"
         )
+        self.audit.write("board_info", {}, out[:200], ok=True)
+        return out
+
+    # ----- file retrieval -----
+
+    async def pull_file(self, remote_path: str, local_path: str) -> str:
+        """Copy a file from the board to the developer machine.
+
+        remote_path: absolute path on the board.
+        local_path:  destination on the machine running this server
+                     (overwritten if it already exists).
+        """
+        if not remote_path.startswith("/"):
+            return "REJECTED: remote_path must be absolute"
+        if "\0" in remote_path or "\n" in remote_path:
+            return "REJECTED: remote_path contains control characters"
+        args = {"remote_path": remote_path, "local_path": local_path}
+        try:
+            await self.t.pull(remote_path, local_path)
+        except TransportError as e:
+            msg = f"PULL_FAILED: {e}"
+            self.audit.write("pull_file", args, msg, ok=False)
+            return msg
+        try:
+            size = os.path.getsize(local_path)
+        except OSError:
+            size = -1
+        msg = f"OK: {remote_path} -> {local_path} ({size} bytes)"
+        self.audit.write("pull_file", args, msg, ok=True)
+        return msg
+
+    # ----- adb diagnostics -----
+
+    async def adb_devices(self) -> str:
+        """List adb devices (`adb devices -l`). Only valid for adb transports.
+
+        Diagnostic for when an adb board fails to connect — shows whether
+        it is visible, offline, or unauthorized.
+        """
+        if not isinstance(self.t, AdbTransport):
+            return (
+                "REJECTED: adb_devices only applies to adb transports "
+                f"(current transport: {self.t.name})"
+            )
+        try:
+            out = await self.t.list_devices()
+        except TransportError as e:
+            msg = f"BOARD_UNREACHABLE: {e}"
+            self.audit.write("adb_devices", {}, msg, ok=False)
+            return msg
+        self.audit.write("adb_devices", {}, out[:200], ok=True)
+        return out

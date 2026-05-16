@@ -61,7 +61,9 @@ class SshTransport(Transport):
                 timeout=self.default_timeout,
             )
         except (OSError, asyncssh.Error, asyncio.TimeoutError) as e:
-            raise TransportError(f"ssh connect to {self.user}@{self.host}:{self.port} failed: {e}") from e
+            raise TransportError(
+                f"ssh connect to {self.user}@{self.host}:{self.port} failed: {e}"
+            ) from e
 
     async def run(self, cmd: str, timeout: float | None = None) -> CommandResult:
         to = timeout or self.default_timeout

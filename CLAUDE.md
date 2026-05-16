@@ -33,6 +33,7 @@ Claude 是大脑和编排者:**选 skill 的是 Claude,调 MCP 工具的也是 C
 | `list_dir` / `lsmod` / `modinfo` / `dump_devicetree` | 文件、模块、设备树 |
 | `read_gpio` / `read_iio` | GPIO / IIO 传感器 |
 | `run_shell(cmd)` | 白名单内的 shell 命令 |
+| `pull_file` / `adb_devices` | 拉文件回开发机 / adb 连接诊断 |
 
 只有当某信息 MCP 工具确实拿不到(白名单外、需要物理操作)时,才请用户协助。
 

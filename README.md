@@ -164,6 +164,8 @@ claude --mcp-config "<linux_board_mcp路径>\mcp.json"
 | `read_iio(device, channel)` | 读 IIO 通道（支持按 name 查找） |
 | `dump_devicetree(subpath)` | 列 `/proc/device-tree` 节点 |
 | `run_shell(cmd)` | allow-list 内的 shell 命令 |
+| `pull_file(remote, local)` | 把板子上的文件拉回开发机 |
+| `adb_devices()` | `adb devices -l`（仅 adb 传输，诊断连接用） |
 
 ### 破坏性（MCP 客户端会要求每次 approve）
 

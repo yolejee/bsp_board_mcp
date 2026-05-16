@@ -1,8 +1,8 @@
 """Transport implementations: SSH and ADB (USB / WiFi)."""
 
+from .adb import AdbTransport
 from .base import CommandResult, Transport, TransportError
 from .ssh import SshTransport
-from .adb import AdbTransport
 
 
 def build_transport(cfg) -> Transport:

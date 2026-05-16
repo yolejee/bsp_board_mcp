@@ -91,6 +91,25 @@ def build_server(cfg: Config) -> FastMCP:
         """
         return await ro.run_shell(cmd)
 
+    @mcp.tool()
+    async def pull_file(remote_path: str, local_path: str) -> str:
+        """Copy a file off the board to the machine running this server.
+
+        remote_path is an absolute path on the board; local_path is the
+        destination (overwritten if it exists). Use it to retrieve crash
+        dumps, configs, or logs for closer inspection.
+        """
+        return await ro.pull_file(remote_path, local_path)
+
+    @mcp.tool()
+    async def adb_devices() -> str:
+        """List adb devices (`adb devices -l`) — adb transports only.
+
+        Diagnostic for when an adb board won't connect: shows whether it
+        is visible, offline, or unauthorized.
+        """
+        return await ro.adb_devices()
+
     # ---- Writable tools (configure your MCP client to confirm before each call) ----
 
     @mcp.tool()

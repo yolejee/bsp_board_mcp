@@ -12,11 +12,9 @@ libraries lag on newer adb protocol features and TLS-pairing edge cases.
 from __future__ import annotations
 
 import asyncio
-import shlex
 from typing import Literal
 
 from .base import CommandResult, Transport, TransportError
-
 
 AdbMode = Literal["usb", "wifi"]
 
@@ -46,6 +44,7 @@ class AdbTransport(Transport):
         self.default_timeout = default_timeout
 
         self._wifi_target = f"{wifi_host}:{wifi_port}" if mode == "wifi" else None
+        self._connected = False
 
     # ----- target selection -----
 
@@ -103,8 +102,21 @@ class AdbTransport(Transport):
             raise TransportError(f"adb wait-for-device failed: {r.stderr.strip()}")
 
     async def disconnect(self) -> None:
+        self._connected = False
         if self.mode == "wifi" and self._wifi_target:
             await self._adb(["disconnect", self._wifi_target], timeout=5)
+
+    async def _ensure_connected(self) -> None:
+        """Run connect() once, lazily, before the first command.
+
+        Critical for wifi mode: without the `adb connect host:port` that
+        connect() performs, every `adb -s host:port shell` would fail
+        because adb has never been told about that target. For usb mode
+        this also does a wait-for-device so a missing board fails clearly.
+        """
+        if not self._connected:
+            await self.connect()
+            self._connected = True
 
     # ----- core API -----
 
@@ -112,6 +124,7 @@ class AdbTransport(Transport):
         # `adb shell` runs the command through the device's /system/bin/sh
         # (Android) or /bin/sh (typical embedded Linux with adbd). We pass
         # the command as a single arg so adb doesn't re-quote our quoting.
+        await self._ensure_connected()
         r = await self._adb(["shell", cmd], timeout=timeout)
         # adb merges stdout/stderr unless `exec-out` is used; the exit code
         # of `adb shell` is the exit code of the remote command on modern
@@ -119,6 +132,7 @@ class AdbTransport(Transport):
         return r
 
     async def push(self, local_path: str, remote_path: str) -> None:
+        await self._ensure_connected()
         r = await self._adb(["push", local_path, remote_path], timeout=60)
         if r.rc != 0:
             raise TransportError(
@@ -127,6 +141,7 @@ class AdbTransport(Transport):
             )
 
     async def pull(self, remote_path: str, local_path: str) -> None:
+        await self._ensure_connected()
         r = await self._adb(["pull", remote_path, local_path], timeout=60)
         if r.rc != 0:
             raise TransportError(
@@ -164,12 +179,3 @@ class AdbTransport(Transport):
         except (FileNotFoundError, asyncio.TimeoutError) as e:
             raise TransportError(f"adb devices failed: {e}") from e
         return stdout.decode("utf-8", errors="replace")
-
-
-def shell_quote(arg: str) -> str:
-    """Quote an argument for safe inclusion in a shell command.
-
-    Both SSH and adb shell go through a remote sh; use this for any value
-    that originates from a tool parameter.
-    """
-    return shlex.quote(arg)

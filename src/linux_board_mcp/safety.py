@@ -142,8 +142,10 @@ def check_shell_command(
         if pat.search(cmd_stripped):
             return False, f"matches deny pattern {pat.pattern!r}"
 
-    # Reject shell metacharacters that would alter command flow.
-    for bad in (";", "|", "&", "&&", "||", "\n", "\r"):
+    # Reject shell metacharacters that would alter command flow or write
+    # files. `>` / `<` are included so a relative-path redirect like
+    # `dmesg > junk` can't slip past the absolute-path deny patterns.
+    for bad in (";", "|", "&", "&&", "||", ">", "<", "\n", "\r"):
         if bad in cmd_stripped:
             return False, f"contains shell metacharacter {bad!r}"
 

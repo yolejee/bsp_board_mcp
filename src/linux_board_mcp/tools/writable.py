@@ -14,7 +14,6 @@ from .. import safety
 from ..audit import AuditLog
 from ..transports.base import Transport, TransportError
 
-
 _MOD_NAME_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
@@ -46,7 +45,7 @@ class WritableTools:
             return "REJECTED: ko_path must end with .ko"
         if not os.path.isfile(ko_path):
             return f"REJECTED: local file {ko_path!r} not found"
-        if any(c in params for c in (";", "&", "|", "\n", "`", "$(")):
+        if any(c in params for c in (";", "&", "|", "<", ">", "\n", "`", "$(")):
             return "REJECTED: params contains shell metacharacters"
 
         remote = f"/tmp/{os.path.basename(ko_path)}"
