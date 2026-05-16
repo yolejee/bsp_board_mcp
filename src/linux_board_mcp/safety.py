@@ -10,33 +10,66 @@ import shlex
 
 # ---- Read-only shell command prefixes (used by `run_shell`).
 ALLOW_SHELL_PREFIXES: tuple[str, ...] = (
+    # system / kernel info
     "dmesg",
     "uname",
     "uptime",
+    "lscpu",
+    "nproc",
+    "lsmod",
+    "modinfo",
+    # resource / process snapshot
     "free",
     "df",
+    "du",
     "ps",
-    "top -b -n 1",
+    "top -bn",         # batch, iteration-limited: `top -bn1`, `top -bn 1`
+    "top -b -n",       # batch, iteration-limited: `top -b -n 1`
+    "vmstat",
+    # systemd (read-only subcommands only — start/stop/restart stay denied)
+    "systemctl status",
+    "systemctl --failed",
+    "systemctl list-",     # list-units / list-unit-files / list-dependencies
+    "systemctl is-",       # is-active / is-enabled / is-failed
+    "systemctl show",
+    "systemctl cat",
+    "systemd-analyze",
+    "journalctl",
+    # storage / filesystem
+    "lsblk",
+    "findmnt",
+    "blkid",
+    "stat",
+    # buses / devices
+    "lsusb",
+    "lspci",
+    "iio_info",
+    "iio_readdev",
+    # network
+    "ip addr",
+    "ip route",
+    "ip link",
+    "ip neigh",
+    "ifconfig",
+    "ss",
+    "netstat",
+    # file reads (scoped) + text tools
     "cat /proc/",
     "cat /sys/",
+    "cat /etc/",
+    "cat /var/log/",
     "ls /proc/",
     "ls /sys/",
     "ls /dev/",
     "ls -l",
     "ls -la",
-    "lsmod",
-    "modinfo",
-    "lscpu",
-    "lsusb",
-    "lspci",
-    "iio_info",
-    "iio_readdev",
-    "ip addr",
-    "ip route",
-    "ip link",
-    "ifconfig",
-    "getprop",         # android boards
-    "logcat -d",       # android boards, dump only
+    "head",
+    "tail",
+    "find",
+    "grep",
+    # android boards
+    "getprop",
+    "logcat -d",       # dump only
     "cat /vendor/",    # android read-only system partitions
     "cat /system/",
 )
@@ -63,6 +96,12 @@ DENY_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bsu\s"),
     re.compile(r">\s*/"),       # any redirect to a path
     re.compile(r">>\s*/"),
+    # Destructive flags on otherwise read-only commands (find / journalctl / ss).
+    re.compile(r"-exec\b"),     # find -exec / -execdir: runs arbitrary commands
+    re.compile(r"-delete\b"),   # find -delete: removes matched files
+    re.compile(r"--vacuum"),    # journalctl --vacuum-*: deletes journal files
+    re.compile(r"--rotate\b"),  # journalctl --rotate
+    re.compile(r"--kill\b"),    # ss --kill: terminates sockets
 )
 
 
