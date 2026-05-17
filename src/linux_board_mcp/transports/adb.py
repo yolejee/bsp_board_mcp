@@ -100,6 +100,7 @@ class AdbTransport(Transport):
         r = await self._adb(["wait-for-device"], timeout=15)
         if r.rc != 0:
             raise TransportError(f"adb wait-for-device failed: {r.stderr.strip()}")
+        self._connected = True
 
     async def disconnect(self) -> None:
         self._connected = False
@@ -116,7 +117,6 @@ class AdbTransport(Transport):
         """
         if not self._connected:
             await self.connect()
-            self._connected = True
 
     # ----- core API -----
 

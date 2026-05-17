@@ -8,8 +8,6 @@ them and can recover.
 
 from __future__ import annotations
 
-import os
-
 from .. import safety
 from ..audit import AuditLog
 from ..transports.adb import AdbTransport
@@ -209,34 +207,6 @@ class ReadOnlyTools:
         )
         self.audit.write("board_info", {}, out[:200], ok=True)
         return out
-
-    # ----- file retrieval -----
-
-    async def pull_file(self, remote_path: str, local_path: str) -> str:
-        """Copy a file from the board to the developer machine.
-
-        remote_path: absolute path on the board.
-        local_path:  destination on the machine running this server
-                     (overwritten if it already exists).
-        """
-        if not remote_path.startswith("/"):
-            return "REJECTED: remote_path must be absolute"
-        if "\0" in remote_path or "\n" in remote_path:
-            return "REJECTED: remote_path contains control characters"
-        args = {"remote_path": remote_path, "local_path": local_path}
-        try:
-            await self.t.pull(remote_path, local_path)
-        except TransportError as e:
-            msg = f"PULL_FAILED: {e}"
-            self.audit.write("pull_file", args, msg, ok=False)
-            return msg
-        try:
-            size = os.path.getsize(local_path)
-        except OSError:
-            size = -1
-        msg = f"OK: {remote_path} -> {local_path} ({size} bytes)"
-        self.audit.write("pull_file", args, msg, ok=True)
-        return msg
 
     # ----- adb diagnostics -----
 

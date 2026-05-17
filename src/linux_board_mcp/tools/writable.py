@@ -1,8 +1,8 @@
-"""Writable / destructive tools.
+"""Writable / sensitive tools.
 
-Each of these changes board state. Configure your MCP client to require
-explicit user approval per call. The tool itself also enforces a deny-by-
-default policy on paths and arguments.
+Each of these either changes board state or moves data off the board.
+Configure your MCP client to require explicit user approval per call. The
+tool itself also enforces a deny-by-default policy on paths and arguments.
 """
 
 from __future__ import annotations
@@ -137,3 +137,32 @@ class WritableTools:
         return await self._run(
             cmd, tool="reboot_board", args={"force": force}, timeout=5
         )
+
+    # ----- file retrieval -----
+
+    async def pull_file(self, remote_path: str, local_path: str) -> str:
+        """Copy a file from the board to the developer machine.
+
+        This does not change board state, but it can read ANY file on the
+        board and overwrite ANY path on the developer machine — broader than
+        the scoped read-only tools — so it lives here, behind per-call
+        approval, rather than in the unprompted read-only set.
+        """
+        if not remote_path.startswith("/"):
+            return "REJECTED: remote_path must be absolute"
+        if "\0" in remote_path or "\n" in remote_path:
+            return "REJECTED: remote_path contains control characters"
+        args = {"remote_path": remote_path, "local_path": local_path}
+        try:
+            await self.t.pull(remote_path, local_path)
+        except TransportError as e:
+            msg = f"PULL_FAILED: {e}"
+            self.audit.write("pull_file", args, msg, ok=False)
+            return msg
+        try:
+            size = os.path.getsize(local_path)
+        except OSError:
+            size = -1
+        msg = f"OK: {remote_path} -> {local_path} ({size} bytes)"
+        self.audit.write("pull_file", args, msg, ok=True)
+        return msg

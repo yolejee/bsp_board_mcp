@@ -213,9 +213,8 @@ ALLOW_SHELL_PREFIXES = ("dmesg", "uname", "cat /proc/", "cat /sys/",
 规则：
 
 - **前缀匹配**——比 startswith 严格；不允许整词等价 (`dmesg` 允许，`dmesg2` 不允许）
-- **任何 shell metacharacter 一律拒绝**：`;` `|` `&` `&&` `||` 换行符
-- **deny 模式叠加**：`rm` `dd` `mkfs` `reboot` `rmmod` `insmod` `modprobe` `fastboot` `fuse` `sudo` `eval` 等无条件拒
-- **重定向 `> /` 也拒**——任何往绝对路径的写不许
+- **任何 shell metacharacter 一律拒绝**：`;` `|` `&` `&&` `||` `>` `<` 换行符——重定向（含相对路径）一并挡掉
+- **deny 模式叠加**：`rm` `dd` `mkfs` `reboot` `rmmod` `insmod` `modprobe` `fastboot` `fuse` `sudo` `eval`，以及只读命令上的破坏性参数 `-exec` `-delete` `--vacuum` `--rotate` `--kill` 等无条件拒
 
 实际校验逻辑：
 
@@ -490,7 +489,7 @@ ro = ReadOnlyTools(t, AuditLog(cfg.audit_log_path))
 dmesg = await ro.read_dmesg(lines=200)
 ```
 
-参考 [docs/mcp-hardware-regression-testing.md](../docs/mcp-hardware-regression-testing.md) 里的 `pytest-mcp` fixture 写法——本质就是这样。
+项目自带的 [tests/](../tests/) 就是这么测的——`test_safety.py` 测纯函数白名单逻辑，`test_runtime.py` 用 fake transport 注入测工具命令拼装和传输层连接逻辑，都不需要真板子。
 
 ### 9.5 给工具加 metrics / tracing
 

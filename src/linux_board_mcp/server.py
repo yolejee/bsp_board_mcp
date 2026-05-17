@@ -92,16 +92,6 @@ def build_server(cfg: Config) -> FastMCP:
         return await ro.run_shell(cmd)
 
     @mcp.tool()
-    async def pull_file(remote_path: str, local_path: str) -> str:
-        """Copy a file off the board to the machine running this server.
-
-        remote_path is an absolute path on the board; local_path is the
-        destination (overwritten if it exists). Use it to retrieve crash
-        dumps, configs, or logs for closer inspection.
-        """
-        return await ro.pull_file(remote_path, local_path)
-
-    @mcp.tool()
     async def adb_devices() -> str:
         """List adb devices (`adb devices -l`) — adb transports only.
 
@@ -145,6 +135,18 @@ def build_server(cfg: Config) -> FastMCP:
     async def reboot_board(force: bool = False) -> str:
         """DESTRUCTIVE: reboot the board. force=True uses SysRq (no fs sync)."""
         return await rw.reboot_board(force=force)
+
+    @mcp.tool()
+    async def pull_file(remote_path: str, local_path: str) -> str:
+        """SENSITIVE: copy a file off the board to the machine running this server.
+
+        remote_path is any absolute path on the board; local_path is the
+        destination (overwritten if it exists). It can read arbitrary board
+        files and write the developer machine, so it is gated like a writable
+        tool — keep per-call approval on. Use it to retrieve crash dumps,
+        configs, or logs for closer inspection.
+        """
+        return await rw.pull_file(remote_path, local_path)
 
     # Transport connection happens lazily on the first tool call. Use
     # `board_info` from the client to verify the board is reachable.

@@ -164,7 +164,6 @@ claude --mcp-config "<linux_board_mcp路径>\mcp.json"
 | `read_iio(device, channel)` | 读 IIO 通道（支持按 name 查找） |
 | `dump_devicetree(subpath)` | 列 `/proc/device-tree` 节点 |
 | `run_shell(cmd)` | allow-list 内的 shell 命令 |
-| `pull_file(remote, local)` | 把板子上的文件拉回开发机 |
 | `adb_devices()` | `adb devices -l`（仅 adb 传输，诊断连接用） |
 
 ### 破坏性（MCP 客户端会要求每次 approve）
@@ -176,6 +175,7 @@ claude --mcp-config "<linux_board_mcp路径>\mcp.json"
 | `write_sysfs(path, value)` | 写 sysfs（写白名单内） |
 | `set_gpio(n, value)` / `export_gpio(n, direction)` | 操作 GPIO |
 | `reboot_board(force)` | 重启 |
+| `pull_file(remote, local)` | 把板子上任意文件拉回开发机（能读任意路径，故需逐次批准） |
 
 详细的工具签名、安全约束、扩展方式 → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
