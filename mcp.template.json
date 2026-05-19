@@ -17,7 +17,8 @@
         "BOARD_HOST": "192.168.7.2",
         "BOARD_PORT": "22",
         "BOARD_USER": "root",
-        "BOARD_KEY": "${USERPROFILE}\\.ssh\\board_rsa",
+        "BOARD_PASSWORD": "",
+        "BOARD_KEY": "",
         "BOARD_TIMEOUT": "15",
         "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log"
       }

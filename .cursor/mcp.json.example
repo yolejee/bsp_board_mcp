@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "linux-board-ssh": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "{{PROJECT_DIR}}",
+        "run",
+        "python",
+        "-m",
+        "linux_board_mcp"
+      ],
+      "env": {
+        "BOARD_NAME": "linux-board-ssh",
+        "BOARD_TRANSPORT": "ssh",
+        "BOARD_HOST": "192.168.x.x",
+        "BOARD_PORT": "22",
+        "BOARD_USER": "root",
+        "BOARD_PASSWORD": "",
+        "BOARD_TIMEOUT": "15",
+        "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log"
+      }
+    }
+  }
+}

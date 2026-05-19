@@ -148,10 +148,10 @@ def build_server(cfg: Config) -> FastMCP:
         """
         return await rw.pull_file(remote_path, local_path)
 
-    # Transport connection happens lazily on the first tool call. Use
-    # `board_info` from the client to verify the board is reachable.
+    # Transport connects lazily on the first tool call (not at startup).
     print(
-        f"[linux_board_mcp] ready: name={cfg.server_name} target={transport.describe()}",
+        f"[linux_board_mcp] ready: name={cfg.server_name} target={transport.describe()} "
+        "(ssh/adb connects on first tool call — run board_info to verify)",
         file=sys.stderr,
     )
 
