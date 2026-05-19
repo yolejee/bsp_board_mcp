@@ -1,5 +1,29 @@
 {
   "mcpServers": {
+    "linux-board-serial": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "{{PROJECT_DIR}}",
+        "run",
+        "python",
+        "-m",
+        "linux_board_mcp"
+      ],
+      "env": {
+        "BOARD_NAME": "linux-board-serial",
+        "BOARD_TRANSPORT": "serial",
+        "BOARD_SERIAL_PORT": "COM3",
+        "BOARD_SERIAL_BAUD": "1500000",
+        "BOARD_SERIAL_BYTESIZE": "8",
+        "BOARD_SERIAL_PARITY": "N",
+        "BOARD_SERIAL_STOPBITS": "1",
+        "BOARD_USER": "root",
+        "BOARD_PASSWORD": "",
+        "BOARD_TIMEOUT": "15",
+        "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log"
+      }
+    },
     "linux-board-ssh": {
       "command": "uv",
       "args": [

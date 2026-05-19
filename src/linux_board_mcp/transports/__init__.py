@@ -1,7 +1,8 @@
-"""Transport implementations: SSH and ADB (USB / WiFi)."""
+"""Transport implementations: SSH, ADB (USB / WiFi), and serial UART."""
 
 from .adb import AdbTransport
 from .base import CommandResult, Transport, TransportError
+from .serial import SerialTransport
 from .ssh import SshTransport
 
 
@@ -33,6 +34,17 @@ def build_transport(cfg) -> Transport:
             wifi_port=cfg.adb_wifi_port,
             default_timeout=cfg.default_timeout,
         )
+    if cfg.transport == "serial":
+        return SerialTransport(
+            port=cfg.serial_port,
+            baud=cfg.serial_baud,
+            bytesize=cfg.serial_bytesize,
+            parity=cfg.serial_parity,
+            stopbits=cfg.serial_stopbits,
+            login_user=cfg.serial_login_user,
+            login_password=cfg.serial_login_password,
+            default_timeout=cfg.default_timeout,
+        )
     raise ValueError(f"unknown transport: {cfg.transport}")
 
 
@@ -42,5 +54,6 @@ __all__ = [
     "TransportError",
     "SshTransport",
     "AdbTransport",
+    "SerialTransport",
     "build_transport",
 ]

@@ -2,11 +2,12 @@
 
 让 Claude（或任何 MCP 客户端）直接连你的嵌入式 Linux 板子，自己跑命令、自己看输出、自己 debug。不用再手动 ssh / adb shell + 复制粘贴。
 
-支持三种连接方式，**同一份 server，env 切换**：
+支持四种连接方式，**同一份 server，env 切换**：
 
 | transport | 适用场景 | 后端 |
 |-----------|---------|------|
 | `ssh` | 板子有 sshd（典型 i.MX / TI 嵌入式 Linux） | `asyncssh` |
+| `serial` | USB 串口控制台（Rockchip fiq-debugger 等） | `pyserial` |
 | `adb-usb` | 板子用 USB adb gadget（Rockchip / Allwinner / Android 设备） | `adb` CLI |
 | `adb-wifi` | 板子开了 adb-over-tcp | `adb` CLI |
 
@@ -89,7 +90,19 @@ cd linux_board_mcp
 "ADB_WIFI_PORT": "5555"
 ```
 
-> JSON 里 Windows 路径用 `\\`（双反斜杠）。
+**Serial**（8N1 示例，Rockchip 调试口常见 1500000）：
+
+```json
+"BOARD_TRANSPORT": "serial",
+"BOARD_SERIAL_PORT": "COM3",
+"BOARD_SERIAL_BAUD": "1500000",
+"BOARD_SERIAL_BYTESIZE": "8",
+"BOARD_SERIAL_PARITY": "N",
+"BOARD_SERIAL_STOPBITS": "1",
+"BOARD_USER": "root"
+```
+
+> JSON 里 Windows 路径用 `\\`（双反斜杠）。串口同时只能被一个程序占用（关闭串口终端 / 其他 MCP server）。
 
 ### 4. 烟雾测试（不挂 Claude，先验证 server 能起来）
 
