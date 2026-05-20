@@ -14,6 +14,41 @@ from typing import Literal
 
 Transport = Literal["ssh", "adb-usb", "adb-wifi", "serial"]
 
+# Max duration for capture_serial (seconds).
+SERIAL_CAPTURE_MAX_SECONDS = 300
+
+
+@dataclass(frozen=True)
+class SerialSettings:
+    """UART parameters for capture_serial (BOARD_SERIAL_* env vars)."""
+
+    port: str
+    baud: int = 115200
+    bytesize: int = 8
+    parity: str = "N"
+    stopbits: int = 1
+    login_user: str | None = None
+    login_password: str | None = None
+
+    @classmethod
+    def from_config(cls, cfg: "Config") -> "SerialSettings":
+        return cls(
+            port=cfg.serial_port,
+            baud=cfg.serial_baud,
+            bytesize=cfg.serial_bytesize,
+            parity=cfg.serial_parity,
+            stopbits=cfg.serial_stopbits,
+            login_user=cfg.serial_login_user,
+            login_password=cfg.serial_login_password,
+        )
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.port)
+
+    def describe(self) -> str:
+        return f"{self.port}@{self.baud}/{self.bytesize}{self.parity.upper()}{self.stopbits}"
+
 
 @dataclass
 class Config:

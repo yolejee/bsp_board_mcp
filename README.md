@@ -103,6 +103,8 @@ cd linux_board_mcp
 ```
 
 > JSON 里 Windows 路径用 `\\`（双反斜杠）。串口同时只能被一个程序占用（关闭串口终端 / 其他 MCP server）。
+>
+> `linux-board-ssh` 若也要用 **`capture_serial`** 抓 UART，在同一 server 的 `env` 里加上与 `linux-board-serial` 相同的 `BOARD_SERIAL_*` 即可。
 
 ### 4. 烟雾测试（不挂 Claude，先验证 server 能起来）
 

@@ -2,7 +2,7 @@
 
 from .adb import AdbTransport
 from .base import CommandResult, Transport, TransportError
-from .serial import SerialTransport
+from .serial import SerialTransport, capture_serial_output, open_serial_port
 from .ssh import SshTransport
 
 
@@ -55,5 +55,7 @@ __all__ = [
     "SshTransport",
     "AdbTransport",
     "SerialTransport",
+    "capture_serial_output",
+    "open_serial_port",
     "build_transport",
 ]

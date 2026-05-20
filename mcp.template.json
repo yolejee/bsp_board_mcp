@@ -20,7 +20,12 @@
         "BOARD_PASSWORD": "",
         "BOARD_KEY": "",
         "BOARD_TIMEOUT": "15",
-        "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log"
+        "BOARD_AUDIT_LOG": "{{PROJECT_DIR}}\\audit.log",
+        "BOARD_SERIAL_PORT": "COM3",
+        "BOARD_SERIAL_BAUD": "1500000",
+        "BOARD_SERIAL_BYTESIZE": "8",
+        "BOARD_SERIAL_PARITY": "N",
+        "BOARD_SERIAL_STOPBITS": "1"
       }
     },
     "linux-board-adb-usb": {

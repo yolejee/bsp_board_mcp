@@ -58,6 +58,75 @@ def _parse_bytesize(value: int) -> int:
     return mapping[value]
 
 
+def open_serial_port(
+    port: str,
+    baud: int,
+    bytesize: int = 8,
+    parity: str = "N",
+    stopbits: int = 1,
+) -> serial.Serial:
+    """Open a UART with the given 8N1-style parameters."""
+    try:
+        return serial.Serial(
+            port=port,
+            baudrate=baud,
+            bytesize=_parse_bytesize(bytesize),
+            parity=_parse_parity(parity),
+            stopbits=_parse_stopbits(stopbits),
+            timeout=0.05,
+            write_timeout=5,
+        )
+    except serial.SerialException as e:
+        raise TransportError(f"serial open {port!r} failed: {e}") from e
+
+
+def _decode_serial_chunks(chunks: list[bytes]) -> str:
+    text = b"".join(chunks).decode("utf-8", errors="replace")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _read_serial_for_seconds(ser: serial.Serial, seconds: float) -> list[bytes]:
+    chunks: list[bytes] = []
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        waiting = ser.in_waiting
+        if waiting:
+            chunks.append(ser.read(waiting))
+        else:
+            time.sleep(0.02)
+    return chunks
+
+
+def capture_serial_output(
+    port: str,
+    baud: int,
+    seconds: float,
+    *,
+    bytesize: int = 8,
+    parity: str = "N",
+    stopbits: int = 1,
+    reboot: bool = False,
+    force: bool = False,
+) -> str:
+    """Read raw UART output for `seconds` on one open port.
+
+    reboot=False: sniff only (no bytes written).
+    reboot=True: write reboot immediately, then read without waiting for shell
+    markers — same connection, zero gap between command and capture.
+    """
+    ser = open_serial_port(port, baud, bytesize, parity, stopbits)
+    try:
+        if reboot:
+            if hasattr(ser, "reset_input_buffer"):
+                ser.reset_input_buffer()
+            cmd = "echo b > /proc/sysrq-trigger\n" if force else "sync; reboot\n"
+            ser.write(cmd.encode("utf-8"))
+            ser.flush()
+        return _decode_serial_chunks(_read_serial_for_seconds(ser, seconds))
+    finally:
+        ser.close()
+
+
 class SerialTransport(Transport):
     name = "serial"
 
@@ -85,18 +154,9 @@ class SerialTransport(Transport):
         self._lock = asyncio.Lock()
 
     def _open_serial(self) -> serial.Serial:
-        try:
-            return serial.Serial(
-                port=self.port,
-                baudrate=self.baud,
-                bytesize=_parse_bytesize(self.bytesize),
-                parity=_parse_parity(self.parity),
-                stopbits=_parse_stopbits(self.stopbits),
-                timeout=0.05,
-                write_timeout=5,
-            )
-        except serial.SerialException as e:
-            raise TransportError(f"serial open {self.port!r} failed: {e}") from e
+        return open_serial_port(
+            self.port, self.baud, self.bytesize, self.parity, self.stopbits
+        )
 
     async def connect(self) -> None:
         async with self._lock:

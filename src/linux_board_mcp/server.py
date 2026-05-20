@@ -16,7 +16,14 @@ from .transports import build_transport
 def build_server(cfg: Config) -> FastMCP:
     transport = build_transport(cfg)
     audit = AuditLog(cfg.audit_log_path)
-    ro = ReadOnlyTools(transport, audit, extra_prefixes=cfg.allow_extra_shell_prefixes)
+    from .config import SerialSettings
+
+    ro = ReadOnlyTools(
+        transport,
+        audit,
+        extra_prefixes=cfg.allow_extra_shell_prefixes,
+        serial_settings=SerialSettings.from_config(cfg),
+    )
     rw = WritableTools(transport, audit)
 
     mcp = FastMCP(cfg.server_name)
@@ -76,6 +83,22 @@ def build_server(cfg: Config) -> FastMCP:
         channel: filename inside the device dir (e.g. 'in_voltage0_raw').
         """
         return await ro.read_iio(device, channel)
+
+    @mcp.tool()
+    async def capture_serial(
+        seconds: int = 10,
+        reboot: bool = False,
+        force: bool = False,
+    ) -> str:
+        """Capture raw UART output for N seconds on BOARD_SERIAL_* (mcp.json).
+
+        reboot=False: passive sniff only.
+        reboot=True: send reboot on the same open port, then read immediately
+        for N seconds (one connection, no gap) — use this for post-reboot boot
+        logs. force=True uses SysRq instant reboot. seconds clamped 1–300.
+        reboot=True is destructive. Close other apps using the COM port.
+        """
+        return await ro.capture_serial(seconds=seconds, reboot=reboot, force=force)
 
     @mcp.tool()
     async def dump_devicetree(subpath: str = "") -> str:

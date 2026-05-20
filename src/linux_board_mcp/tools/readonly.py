@@ -8,18 +8,29 @@ them and can recover.
 
 from __future__ import annotations
 
+import asyncio
+
 from .. import safety
 from ..audit import AuditLog
+from ..config import SERIAL_CAPTURE_MAX_SECONDS, SerialSettings
 from ..transports.adb import AdbTransport
 from ..transports.base import Transport, TransportError
+from ..transports.serial import SerialTransport, capture_serial_output
 
 
 # All tools share a single Transport + AuditLog passed in by server.py.
 class ReadOnlyTools:
-    def __init__(self, transport: Transport, audit: AuditLog, extra_prefixes: tuple[str, ...] = ()):
+    def __init__(
+        self,
+        transport: Transport,
+        audit: AuditLog,
+        extra_prefixes: tuple[str, ...] = (),
+        serial_settings: SerialSettings | None = None,
+    ):
         self.t = transport
         self.audit = audit
         self.extra_prefixes = extra_prefixes
+        self.serial_settings = serial_settings or SerialSettings(port="")
 
     # ----- internal helper -----
 
@@ -156,6 +167,80 @@ class ReadOnlyTools:
             tool="read_iio",
             args={"device": device, "channel": channel, "path": full},
         )
+
+    # ----- raw UART capture (independent of active transport) -----
+
+    async def capture_serial(
+        self,
+        seconds: int = 10,
+        reboot: bool = False,
+        force: bool = False,
+    ) -> str:
+        """Capture raw UART output for N seconds (BOARD_SERIAL_* from mcp.json).
+
+        reboot=False: passive sniff (no bytes sent).
+        reboot=True: write `sync; reboot` (or SysRq if force=True) on the same
+        open port, then read immediately for N seconds — no shell marker wait,
+        no second connection. Destructive when reboot=True.
+        """
+        if not self.serial_settings.configured:
+            return (
+                "REJECTED: BOARD_SERIAL_PORT is not set. "
+                "Add BOARD_SERIAL_* env vars (see linux-board-serial in mcp.json)."
+            )
+
+        seconds = max(1, min(int(seconds), SERIAL_CAPTURE_MAX_SECONDS))
+        args = {
+            "seconds": seconds,
+            "port": self.serial_settings.port,
+            "reboot": reboot,
+            "force": force,
+        }
+        released_serial = False
+
+        if (
+            isinstance(self.t, SerialTransport)
+            and self.t.port == self.serial_settings.port
+        ):
+            await self.t.disconnect()
+            released_serial = True
+
+        try:
+            loop = asyncio.get_event_loop()
+            s = self.serial_settings
+            text = await loop.run_in_executor(
+                None,
+                lambda: capture_serial_output(
+                    s.port,
+                    s.baud,
+                    float(seconds),
+                    bytesize=s.bytesize,
+                    parity=s.parity,
+                    stopbits=s.stopbits,
+                    reboot=reboot,
+                    force=force,
+                ),
+            )
+        except TransportError as e:
+            msg = f"SERIAL_CAPTURE_FAILED: {e}"
+            self.audit.write("capture_serial", args, msg, ok=False)
+            return msg
+        except OSError as e:
+            msg = f"SERIAL_CAPTURE_FAILED: {e}"
+            self.audit.write("capture_serial", args, msg, ok=False)
+            return msg
+        finally:
+            if released_serial:
+                await self.t.connect()
+
+        mode = "reboot+capture" if reboot else "sniff"
+        header = (
+            f"serial: {self.serial_settings.describe()}, "
+            f"{mode} {seconds}s\n"
+        )
+        out = header + text
+        self.audit.write("capture_serial", args, out[:200], ok=True)
+        return out
 
     # ----- device tree -----
 
