@@ -138,6 +138,35 @@ class WritableTools:
             cmd, tool="reboot_board", args={"force": force}, timeout=5
         )
 
+    # ----- file push -----
+
+    async def push_file(self, local_path: str, remote_path: str) -> str:
+        """Copy a file from the developer machine to the board.
+
+        This can write ANY path on the board, so it lives here behind
+        per-call approval alongside pull_file.
+        """
+        if not os.path.isfile(local_path):
+            return f"REJECTED: local file {local_path!r} not found"
+        if not remote_path.startswith("/"):
+            return "REJECTED: remote_path must be absolute"
+        if "\0" in remote_path or "\n" in remote_path:
+            return "REJECTED: remote_path contains control characters"
+        args = {"local_path": local_path, "remote_path": remote_path}
+        try:
+            await self.t.push(local_path, remote_path)
+        except TransportError as e:
+            msg = f"PUSH_FAILED: {e}"
+            self.audit.write("push_file", args, msg, ok=False)
+            return msg
+        try:
+            size = os.path.getsize(local_path)
+        except OSError:
+            size = -1
+        msg = f"OK: {local_path} -> {remote_path} ({size} bytes)"
+        self.audit.write("push_file", args, msg, ok=True)
+        return msg
+
     # ----- file retrieval -----
 
     async def pull_file(self, remote_path: str, local_path: str) -> str:

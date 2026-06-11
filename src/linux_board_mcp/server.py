@@ -171,6 +171,17 @@ def build_server(cfg: Config) -> FastMCP:
         """
         return await rw.pull_file(remote_path, local_path)
 
+    @mcp.tool()
+    async def push_file(local_path: str, remote_path: str) -> str:
+        """DESTRUCTIVE: copy a file from the dev machine onto the board.
+
+        local_path is on the developer machine (must exist and be a regular file).
+        remote_path is the absolute destination path on the board (overwritten if
+        it exists). This writes to any path on the board, so it is gated behind
+        per-call approval. Use it to deploy binaries, scripts, or configs.
+        """
+        return await rw.push_file(local_path, remote_path)
+
     # Transport connects lazily on the first tool call (not at startup).
     print(
         f"[linux_board_mcp] ready: name={cfg.server_name} target={transport.describe()} "
