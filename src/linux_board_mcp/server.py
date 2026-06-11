@@ -160,6 +160,16 @@ def build_server(cfg: Config) -> FastMCP:
         return await rw.reboot_board(force=force)
 
     @mcp.tool()
+    async def run_command(cmd: str, timeout: float = 30.0) -> str:
+        """DESTRUCTIVE: run an arbitrary shell command on the board.
+
+        Unlike run_shell (read-only allowlist), this can start/stop processes,
+        run scripts, and modify board state. Each call requires user approval.
+        Deny patterns block the most dangerous commands (rm, dd, mkfs, reboot).
+        """
+        return await rw.run_command(cmd, timeout)
+
+    @mcp.tool()
     async def pull_file(remote_path: str, local_path: str) -> str:
         """SENSITIVE: copy a file off the board to the machine running this server.
 

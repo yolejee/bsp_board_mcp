@@ -138,6 +138,43 @@ class WritableTools:
             cmd, tool="reboot_board", args={"force": force}, timeout=5
         )
 
+    # ----- arbitrary command execution -----
+
+    async def run_command(self, cmd: str, timeout: float = 30.0) -> str:
+        """Run an arbitrary shell command on the board.
+
+        Unlike run_shell (read-only allowlist), this can start/stop
+        processes, run scripts, and modify board state.  Each call is
+        gated behind per-call client-side approval. Defence in depth:
+        deny patterns block the most destructive commands (rm, dd,
+        mkfs, reboot, …); shell metacharacters ; | && || are rejected
+        to prevent chaining.
+        """
+        cmd_stripped = cmd.strip()
+        if not cmd_stripped:
+            return "REJECTED: empty command"
+
+        # Block commands that match explicit deny patterns (belt-and-suspenders
+        # on top of the per-call approval gate).
+        for pat in safety.DENY_PATTERNS:
+            if pat.search(cmd_stripped):
+                return f"REJECTED: matches deny pattern {pat.pattern!r}"
+
+        # Reject chaining / pipeline metacharacters so a single approved
+        # command can't be silently extended into a second one.  Allow a
+        # trailing `&` for backgrounding (common when starting daemons).
+        cmd_no_bg = cmd_stripped.rstrip("&").rstrip()
+        for bad in (";", "|", "&&", "||", "\n", "\r"):
+            if bad in cmd_no_bg:
+                return f"REJECTED: contains shell metacharacter {bad!r}"
+
+        return await self._run(
+            cmd_stripped,
+            tool="run_command",
+            args={"cmd": cmd_stripped},
+            timeout=timeout,
+        )
+
     # ----- file push -----
 
     async def push_file(self, local_path: str, remote_path: str) -> str:
