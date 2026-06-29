@@ -6,8 +6,15 @@ from .serial import SerialTransport, capture_serial_output, open_serial_port
 from .ssh import SshTransport
 
 
-def build_transport(cfg) -> Transport:
-    """Factory: pick the right transport based on config."""
+def build_transport(cfg) -> Transport | None:
+    """Factory: pick the right transport based on config.
+
+    Returns ``None`` for ``transport == "none"`` — this is the MCU-only mode
+    where no Linux shell transport exists (the target is a bare-metal MCU
+    reached solely via a debug probe + optional UART capture).
+    """
+    if cfg.transport == "none":
+        return None
     if cfg.transport == "ssh":
         return SshTransport(
             host=cfg.ssh_host,

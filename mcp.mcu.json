@@ -1,0 +1,32 @@
+{
+  "_comment": "MCU debug via CMSIS-DAP + serial — copy to .mcp.json and edit to match your board",
+  "mcpServers": {
+    "linux-board-mcu": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "e:\\aitools\\bsp_board_mcp",
+        "run",
+        "python",
+        "-m",
+        "linux_board_mcp"
+      ],
+      "env": {
+        "BOARD_NAME": "linux-board-mcu",
+        "BOARD_TRANSPORT": "none",
+        "BOARD_SERIAL_PORT": "COM8",
+        "BOARD_SERIAL_BAUD": "115200",
+        "BOARD_SERIAL_BYTESIZE": "8",
+        "BOARD_SERIAL_PARITY": "N",
+        "BOARD_SERIAL_STOPBITS": "1",
+        "BOARD_TIMEOUT": "15",
+        "BOARD_AUDIT_LOG": "e:\\aitools\\bsp_board_mcp\\audit.log",
+
+        "BOARD_PROBE_TYPE": "pyocd",
+        "_comment_target": "Use 'cortex_m' for generic Cortex-M targets (GD32, AT32, etc), or a pyOCD built-in target name like 'stm32f407vet6'",
+        "BOARD_PROBE_TARGET": "cortex_m",
+        "BOARD_PROBE_FREQUENCY": "250000"
+      }
+    }
+  }
+}

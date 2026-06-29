@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-Transport = Literal["ssh", "adb-usb", "adb-wifi", "serial"]
+Transport = Literal["ssh", "adb-usb", "adb-wifi", "serial", "none"]
+BoardProbe = Literal["", "pyocd"]
 
 # Max duration for capture_serial (seconds).
 SERIAL_CAPTURE_MAX_SECONDS = 300
@@ -77,6 +78,11 @@ class Config:
     serial_login_user: str | None
     serial_login_password: str | None
 
+    # MCU debug probe
+    probe_type: BoardProbe
+    probe_target: str
+    probe_frequency: int
+
     # Behavior
     default_timeout: float
     audit_log_path: Path
@@ -85,9 +91,9 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         transport = os.environ.get("BOARD_TRANSPORT", "ssh").lower().strip()
-        if transport not in ("ssh", "adb-usb", "adb-wifi", "serial"):
+        if transport not in ("ssh", "adb-usb", "adb-wifi", "serial", "none"):
             raise ValueError(
-                "BOARD_TRANSPORT must be one of ssh / adb-usb / adb-wifi / serial, "
+                "BOARD_TRANSPORT must be one of ssh / adb-usb / adb-wifi / serial / none, "
                 f"got {transport!r}"
             )
 
@@ -137,6 +143,13 @@ class Config:
                 )
             ).expanduser(),
             allow_extra_shell_prefixes=extra_prefixes,
+            probe_type=_parse_probe_type(
+                os.environ.get("BOARD_PROBE_TYPE", "")
+            ),
+            probe_target=os.environ.get("BOARD_PROBE_TARGET", ""),
+            probe_frequency=int(
+                os.environ.get("BOARD_PROBE_FREQUENCY", "250000")
+            ),
         )
 
 
@@ -153,3 +166,19 @@ def _resolve_ssh_key(raw: str | None) -> str | None:
         file=sys.stderr,
     )
     return None
+
+
+def _parse_probe_type(raw: str) -> "BoardProbe":
+    """Validate BOARD_PROBE_TYPE env var."""
+    v = raw.strip().lower()
+    if not v:
+        return ""  # type: ignore[return-value]
+    valid = ("pyocd",)
+    if v not in valid:
+        print(
+            f"[linux_board_mcp] warning: unknown BOARD_PROBE_TYPE {raw!r}, "
+            f"expected one of {valid} — MCU tools will not be available",
+            file=sys.stderr,
+        )
+        return ""  # type: ignore[return-value]
+    return v  # type: ignore[return-value]

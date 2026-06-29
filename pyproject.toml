@@ -16,6 +16,9 @@ dependencies = [
     "pyserial>=3.5",
 ]
 
+[project.optional-dependencies]
+mcu = ["pyocd>=0.36"]
+
 [project.scripts]
 linux-board-mcp = "linux_board_mcp.__main__:main"
 
